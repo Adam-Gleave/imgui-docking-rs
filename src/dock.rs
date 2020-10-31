@@ -1,6 +1,77 @@
+use bitflags::bitflags;
+
 use crate::string::ImStr;
 use crate::sys;
 use crate::Direction;
+use crate::sys::ImGuiWindowClass;
+
+bitflags! {
+    /// Configuration flags for docking
+    #[repr(transparent)]
+    pub struct DockNodeFlags: u32 {
+        /// Keep all docked items even if not visible
+        const KEEP_ALIVE_ONLY = sys::ImGuiDockNodeFlags_KeepAliveOnly;
+
+        /// Disable docking in the central node
+        const NO_DOCKING_IN_CENTRAL_NODE = sys::ImGuiDockNodeFlags_NoDockingInCentralNode;
+
+        /// Draw the whole dockspace background
+        const PASSTHRU_CENTRAL_NODE = sys::ImGuiDockNodeFlags_PassthruCentralNode;
+
+        /// Disable further splitting of child dock nodes
+        const NO_SPLIT = sys::ImGuiDockNodeFlags_NoSplit;
+
+        /// Disable resizing of child dock nodes
+        const NO_RESIZE = sys::ImGuiDockNodeFlags_NoResize;
+
+        /// Automatically hide tab bar of docked nodes
+        const AUTO_HIDE_TAB_BAR = sys::ImGuiDockNodeFlags_AutoHideTabBar;
+    }
+}
+
+/// Dockspace data, the root will extend to cover the viewport at all times
+#[derive(Clone, PartialEq)]
+pub struct DockSpace<'a> {
+    id: &'a ImStr,
+    flags: DockNodeFlags,
+    window_class: *const ImGuiWindowClass,
+}
+
+impl<'a> DockSpace<'a> {
+    pub fn new(id: &'a ImStr) -> Self {
+        let window_class;
+        
+        unsafe { window_class = sys::ImGuiWindowClass_ImGuiWindowClass() };
+        
+        let mut dockspace = Self {
+            id,
+            flags: DockNodeFlags::PASSTHRU_CENTRAL_NODE,
+            window_class,
+        };
+
+        dockspace.flags.insert(DockNodeFlags::PASSTHRU_CENTRAL_NODE);
+        dockspace
+    }
+
+    #[inline]
+    pub fn flags(mut self, flags: DockNodeFlags) -> Self {
+        self.flags = flags;
+        
+        self
+    }
+
+    pub fn over_viewport(self) -> Self {
+        unsafe { sys::igDockSpaceOverViewport(sys::igGetMainViewport(), self.flags.bits() as i32, self.window_class) };
+        
+        self
+    }
+}
+
+impl<'a> Drop for DockSpace<'a> {
+    fn drop(&mut self) {
+        unsafe { sys::ImGuiWindowClass_destroy(self.window_class as *mut _ ) }
+    }
+}
 
 #[derive(Clone, Copy, PartialEq)]
 pub struct DockNode {
